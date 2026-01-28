@@ -3,3 +3,163 @@ title: "MP1"
 format: html
 ---
 
+## Load Packages
+
+```{r setup}
+library(tidyverse)
+library(kableExtra)
+library(markovchain)
+```
+
+## Data Preprocessing
+
+```{r}
+# imperial beach station USW00093115
+# 12/25/2008 - 1/12/2026
+sd <- read.csv("https://www.ncei.noaa.gov/access/past-weather/USW00093115/data.csv", skip = 1) |>
+  mutate(Date = as.Date(Date, tryFormats = "%Y-%m-%d")) |>
+  filter(Date <= as.Date("2026-01-05"),
+         Date >= as.Date("2014-08-01")) |>
+  rename(prcp = "PRCP..Inches.",
+         temp_max = "TMAX..Degrees.Fahrenheit.")
+
+
+# marin county station USC00047880
+# 10/31/2008 - 1/21/2026
+marin <- read.csv("https://www.ncei.noaa.gov/access/past-weather/USC00047880/data.csv", skip = 1) |>
+  mutate(Date = as.Date(Date, tryFormats = "%Y-%m-%d")) |>
+  filter(Date <= as.Date("2026-01-05"),
+         Date >= as.Date("2014-08-01")) |>
+  rename(prcp = "PRCP..Inches.",
+         temp_max = "TMAX..Degrees.Fahrenheit.")
+
+# slo county station USW00093206 
+# 10/31/2008 - 1/21/2026
+slo <- read_csv('https://www.ncei.noaa.gov/access/past-weather/USW00093206/data.csv', skip = 1) |>
+  mutate(Date = as.Date(Date, tryFormats = "%Y-%m-%d")) |>
+  filter(Date <= as.Date("2026-01-05"),
+         Date >= as.Date("2014-08-01")) |>
+  rename(prcp = "PRCP (Inches)",
+         temp_max = "TMAX (Degrees Fahrenheit)")
+```
+
+## Parameterize Markov Chain
+
+```{r}
+# Rain
+# 0 inches = none
+# 0 to 1 = light
+# >= 1 = heavy
+# 
+# Temp
+# <63 = cold
+# 63-75 = comfortable
+# >75 = hot
+
+add_weather_cats <- function(df) {
+  df %>%
+    mutate(
+      rain_cat = case_when(
+        prcp == 0              ~ "none",
+        prcp > 0 & prcp < 1    ~ "light",
+        prcp >= 1              ~ "heavy",
+        TRUE                   ~ NA_character_
+      ),
+      temp_cat = case_when(
+        temp_max < 63          ~ "cold",
+        temp_max >= 63 & temp_max <= 75 ~ "comfortable",
+        temp_max > 75          ~ "hot",
+        TRUE                   ~ NA_character_
+      ),
+      rain_cat = factor(rain_cat, levels = c("none", "light", "heavy")),
+    temp_cat = factor(temp_cat, levels = c("cold", "comfortable", "hot"))
+    )
+}
+
+
+slo <- add_weather_cats(slo)
+sd <- add_weather_cats(sd)
+marin <- add_weather_cats(marin)
+```
+
+## Summary Table of Days in Each State
+
+```{r}
+# rain states
+table(slo$rain_cat, useNA = 'always') |> prop.table()
+table(sd$rain_cat, useNA = 'always') |> prop.table()
+table(marin$rain_cat, useNA = 'always') |> prop.table()
+
+# weather states
+table(slo$temp_cat, useNA = 'always') |> prop.table()
+table(sd$temp_cat, useNA = 'always') |> prop.table()
+table(marin$temp_cat, useNA = 'always') |> prop.table()
+
+```
+
+## Fit Markov Models for San Diego: Precipitation & Temperature
+
+```{r}
+sd_rain <- sd |>
+  select(rain_cat)
+slo_rain <- slo |>
+  select(rain_cat)
+marin_rain <- marin |>
+  select(rain_cat)
+sd_temp <- sd |>
+  select(temp_cat)
+slo_temp <- slo |>
+  select(temp_cat)
+marin_temp <- marin |>
+  select(temp_cat)
+
+fit_markov_on_nonmissing_blocks <- function(x, min_block_length = 2) {
+  is_miss <- is.na(x)
+  block_id <- cumsum(is_miss != dplyr::lag(is_miss, default = FALSE))
+  blocks <- split(x, block_id)
+  blocks <- lapply(blocks, function(b) b[!is.na(b)])
+  blocks <- Filter(function(b) length(b) > min_block_length, blocks)
+
+
+  if (length(blocks) == 0) {
+    stop("No blocks longer than min_block_length found.")
+  }
+
+
+  markovchain::markovchainFit(
+    data = blocks,
+    method = "mle"
+  )
+}
+
+# rain chains
+sd_rain_chain <- fit_markov_on_nonmissing_blocks(sd_rain)
+slo_rain_chain <- fit_markov_on_nonmissing_blocks(slo_rain)
+marin_rain_chain <- fit_markov_on_nonmissing_blocks(marin_rain)
+
+sd_temp_chain <- fit_markov_on_nonmissing_blocks(sd_temp)
+slo_temp_chain <- fit_markov_on_nonmissing_blocks(slo_temp)
+marin_temp_chain <- fit_markov_on_nonmissing_blocks(marin_temp)
+```
+
+## Transition Probabilities
+
+```{r}
+# transition probabilities
+sd_rain_chain$estimate
+slo_rain_chain$estimate
+marin_rain_chain$estimate
+
+sd_temp_chain$estimate
+slo_temp_chain$estimate
+marin_temp_chain$estimate
+
+# stationary distribution
+steadyStates(sd_rain_chain$estimate)
+steadyStates(slo_rain_chain$estimate)
+steadyStates(marin_rain_chain$estimate)
+
+steadyStates(sd_temp_chain$estimate)
+steadyStates(slo_temp_chain$estimate)
+steadyStates(marin_temp_chain$estimate)
+```
