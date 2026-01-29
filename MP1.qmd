@@ -3,17 +3,20 @@ title: "MP1"
 format: html
 ---
 
-## Load Packages
-
 ```{r setup}
+#| include: false
 library(tidyverse)
 library(kableExtra)
 library(markovchain)
+library(rlang)
 ```
+
+# Preprocessing
 
 ## Data Preprocessing
 
 ```{r}
+#| message: false
 # imperial beach station USW00093115
 # 12/25/2008 - 1/12/2026
 sd <- read.csv("https://www.ncei.noaa.gov/access/past-weather/USW00093115/data.csv", skip = 1) |>
@@ -21,7 +24,8 @@ sd <- read.csv("https://www.ncei.noaa.gov/access/past-weather/USW00093115/data.c
   filter(Date <= as.Date("2026-01-05"),
          Date >= as.Date("2014-08-01")) |>
   rename(prcp = "PRCP..Inches.",
-         temp_max = "TMAX..Degrees.Fahrenheit.")
+         temp_max = "TMAX..Degrees.Fahrenheit.") |> 
+  select(Date, prcp, temp_max)
 
 
 # marin county station USC00047880
@@ -31,7 +35,8 @@ marin <- read.csv("https://www.ncei.noaa.gov/access/past-weather/USC00047880/dat
   filter(Date <= as.Date("2026-01-05"),
          Date >= as.Date("2014-08-01")) |>
   rename(prcp = "PRCP..Inches.",
-         temp_max = "TMAX..Degrees.Fahrenheit.")
+         temp_max = "TMAX..Degrees.Fahrenheit.") |> 
+  select(Date, prcp, temp_max)
 
 # slo county station USW00093206 
 # 10/31/2008 - 1/21/2026
@@ -40,126 +45,269 @@ slo <- read_csv('https://www.ncei.noaa.gov/access/past-weather/USW00093206/data.
   filter(Date <= as.Date("2026-01-05"),
          Date >= as.Date("2014-08-01")) |>
   rename(prcp = "PRCP (Inches)",
-         temp_max = "TMAX (Degrees Fahrenheit)")
+         temp_max = "TMAX (Degrees Fahrenheit)") |> 
+  select(Date, prcp, temp_max)
+
+weather_all <- bind_rows(
+  sd    %>% mutate(location = "San Diego"),
+  slo   %>% mutate(location = "SLO County"),
+  marin %>% mutate(location = "Marin County")
+)
 ```
 
-## Parameterize Markov Chain
+## Add Rain + Temp + Season States
 
 ```{r}
 # Rain
 # 0 inches = none
 # 0 to 1 = light
 # >= 1 = heavy
-# 
+
 # Temp
 # <63 = cold
 # 63-75 = comfortable
 # >75 = hot
 
-add_weather_cats <- function(df) {
+# Seasons:
+# Oct-Mar
+# Apr-Sept
+
+add_weathers <- function(df) {
   df %>%
     mutate(
-      rain_cat = case_when(
+      rain = case_when(
         prcp == 0              ~ "none",
         prcp > 0 & prcp < 1    ~ "light",
         prcp >= 1              ~ "heavy",
         TRUE                   ~ NA_character_
       ),
-      temp_cat = case_when(
-        temp_max < 63          ~ "cold",
+      temp = case_when(
+        temp_max < 63                   ~ "cold",
         temp_max >= 63 & temp_max <= 75 ~ "comfortable",
-        temp_max > 75          ~ "hot",
-        TRUE                   ~ NA_character_
+        temp_max > 75                   ~ "hot",
+        TRUE                            ~ NA_character_
       ),
-      rain_cat = factor(rain_cat, levels = c("none", "light", "heavy")),
-    temp_cat = factor(temp_cat, levels = c("cold", "comfortable", "hot"))
+      season = case_when(
+        lubridate::month(Date) %in% c(10,11,12,1,2,3) ~ "Oct–Mar",
+        lubridate::month(Date) %in% c(4,5,6,7,8,9)    ~ "Apr–Sep",
+        TRUE ~ NA_character_
+      ),
+      rain = factor(rain, levels = c("none", "light", "heavy")),
+      temp = factor(temp, levels = c("cold", "comfortable", "hot")),
+      season   = factor(season, levels = c("Oct–Mar", "Apr–Sep"))
     )
 }
 
-
-slo <- add_weather_cats(slo)
-sd <- add_weather_cats(sd)
-marin <- add_weather_cats(marin)
+weather_all <- weather_all |> add_weathers()
 ```
 
-## Summary Table of Days in Each State
+## Helper Functions
 
 ```{r}
-# rain states
-table(slo$rain_cat, useNA = 'always') |> prop.table()
-table(sd$rain_cat, useNA = 'always') |> prop.table()
-table(marin$rain_cat, useNA = 'always') |> prop.table()
-
-# weather states
-table(slo$temp_cat, useNA = 'always') |> prop.table()
-table(sd$temp_cat, useNA = 'always') |> prop.table()
-table(marin$temp_cat, useNA = 'always') |> prop.table()
-
-```
-
-## Fit Markov Models for San Diego: Precipitation & Temperature
-
-```{r}
-sd_rain <- sd |>
-  select(rain_cat)
-slo_rain <- slo |>
-  select(rain_cat)
-marin_rain <- marin |>
-  select(rain_cat)
-sd_temp <- sd |>
-  select(temp_cat)
-slo_temp <- slo |>
-  select(temp_cat)
-marin_temp <- marin |>
-  select(temp_cat)
-
-fit_markov_on_nonmissing_blocks <- function(x, min_block_length = 2) {
-  is_miss <- is.na(x)
-  block_id <- cumsum(is_miss != dplyr::lag(is_miss, default = FALSE))
-  blocks <- split(x, block_id)
-  blocks <- lapply(blocks, function(b) b[!is.na(b)])
-  blocks <- Filter(function(b) length(b) > min_block_length, blocks)
-
-
-  if (length(blocks) == 0) {
-    stop("No blocks longer than min_block_length found.")
-  }
-
-
-  markovchain::markovchainFit(
-    data = blocks,
-    method = "mle"
+state_props <- function(x) {
+  tab <- table(x, useNA = "always")
+  tibble(
+    state = names(tab),
+    n     = as.integer(tab),
+    prop  = as.numeric(tab / sum(tab))
   )
 }
 
-# rain chains
-sd_rain_chain <- fit_markov_on_nonmissing_blocks(sd_rain)
-slo_rain_chain <- fit_markov_on_nonmissing_blocks(slo_rain)
-marin_rain_chain <- fit_markov_on_nonmissing_blocks(marin_rain)
+get_table <- function(cat_col, ...) {
+  weather_all %>%
+    group_by(...) %>%
+    summarise(data = list(state_props({{ cat_col }})), .groups = "drop") %>%
+    unnest(data)
+}
 
-sd_temp_chain <- fit_markov_on_nonmissing_blocks(sd_temp)
-slo_temp_chain <- fit_markov_on_nonmissing_blocks(slo_temp)
-marin_temp_chain <- fit_markov_on_nonmissing_blocks(marin_temp)
+fit_markov_on_nonmissing_blocks <- function(x) {
+  x <- as.vector(x)
+  is_miss  <- is.na(x)
+  block_id <- cumsum(is_miss != dplyr::lag(is_miss, default = FALSE))
+  blocks <- split(x, block_id)
+  blocks <- lapply(blocks, \(b) b[!is.na(b)])
+  blocks <- Filter(\(b) length(b) > 2, blocks)
+  markovchainFit(data = blocks, method = "mle")
+}
+
+markov_report <- function(cat_col, group_cols = c("location")) {
+  fit_tbl <- weather_all %>%
+    group_by(across(all_of(group_cols)))%>%
+    summarise(seq = list(.data[[cat_col]]), .groups = "drop") %>%
+    mutate(
+      fit   = map(seq, fit_markov_on_nonmissing_blocks),
+      chain = map(fit, "estimate"),
+      steady = map(chain, steadyStates)
+    )
+  out <- vector("list", nrow(fit_tbl))
+  for (i in seq_len(nrow(fit_tbl))) {
+    row <- fit_tbl[i, ]
+
+    chain <- row$chain[[1]]
+    seq_vec <- row$seq[[1]] %>%
+      as.factor() %>%
+      fct_na_value_to_level(level = "unobserved")
+
+    # group label
+    grp_vals <- row %>% select(any_of(group_cols))
+    grp_label <- paste(paste0(names(grp_vals), ": ", sapply(grp_vals, as.character)), collapse = " | ")
+
+    cat("\n\n## ", "Chain — ", grp_label, "\n\n", sep = "")
+
+    # adequacy: transition counts and row sums
+    transition_counts <- createSequenceMatrix(seq_vec)
+    row_totals <- rowSums(transition_counts)
+
+    cat("### Data adequacy check\n\n")
+    print(tibble(state = names(row_totals), outgoing_transitions = as.integer(row_totals)))
+
+    # estimated transition matrix
+    cat("\n\n### Estimated transition probabilities\n\n")
+    print(chain@transitionMatrix)
+
+    # stationary distribution + expected return times
+    cat("\n\n### Stationary distribution + Expected return times (1 / π)\n\n")
+    pi <- as.numeric(steadyStates(chain)[1, ])
+    names(pi) <- states(chain)
+    print(tibble(state = names(pi), stationary = pi, expected_return_time = 1 / pi))
+    
+    # transition matrix for plotting
+    trans_long <- as.data.frame(chain@transitionMatrix) %>%
+      rownames_to_column("from") %>%
+      pivot_longer(-from, names_to = "to", values_to = "p")
+
+    out[[i]] <- bind_cols(grp_vals, trans_long)
+  }
+  p <- bind_rows(out) %>%
+    ggplot(aes(x = to, y = from, fill = p)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = sprintf("%.2f", p)), size = 3) +
+    labs(title = paste0(cat_col, " transition matrices by ", group_cols), 
+         x = "To", y = "From", fill = "P") +
+    theme_minimal(base_size = 12)
+  
+  if (length(group_cols) == 1) {
+    p <- p + facet_wrap(as.formula(paste0("~", group_cols[1])))
+  } else {
+    p <- p + facet_grid(as.formula(paste0(group_cols[2], " ~ ", group_cols[1])))
+  }
+    
+  return(p)
+}
 ```
 
-## Transition Probabilities
+# Part 1: Location
+
+## Summary Table of Days in Each State
+
+### Rain
 
 ```{r}
-# transition probabilities
-sd_rain_chain$estimate
-slo_rain_chain$estimate
-marin_rain_chain$estimate
+rain_props_loc <- get_table(rain, location)
 
-sd_temp_chain$estimate
-slo_temp_chain$estimate
-marin_temp_chain$estimate
+rain_props_loc %>%
+  select(location, state, prop) %>%
+  pivot_wider(
+    names_from  = state,
+    values_from = prop
+  )
 
-# stationary distribution
-steadyStates(sd_rain_chain$estimate)
-steadyStates(slo_rain_chain$estimate)
-steadyStates(marin_rain_chain$estimate)
-
-steadyStates(sd_temp_chain$estimate)
-steadyStates(slo_temp_chain$estimate)
-steadyStates(marin_temp_chain$estimate)
+rain_props_loc %>%
+  ggplot(aes(x = location, y = prop, fill = state)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Rain state composition by location", x = NULL, y = "Proportion of days", fill = "State") +
+  theme_minimal(base_size = 12)
 ```
+### Temp
+
+```{r}
+temp_props_loc <- get_table(temp, location)
+
+temp_props_loc %>%
+  select(location, state, prop) %>%
+  pivot_wider(
+    names_from  = state,
+    values_from = prop
+  )
+
+temp_props_loc %>%
+  ggplot(aes(x = location, y = prop, fill = state)) +
+  geom_col() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Rain state composition by location", x = NULL, y = "Proportion of days", fill = "State") +
+  theme_minimal(base_size = 12)
+```
+
+## Fit Markov Models
+
+### Rain
+
+```{r}
+markov_report("rain", c("location"))
+```
+### Temp
+
+```{r}
+markov_report("temp", c("location"))
+```
+
+# Part 2: Location x Season
+
+## Summary Table of Days in Each State
+
+### Rain
+
+```{r}
+rain_props_loc_season <- get_table(rain, location, season)
+
+rain_props_loc_season %>%
+  select(location, state, season, prop) %>%
+  pivot_wider(
+    names_from  = state,
+    values_from = prop
+  )
+
+rain_props_loc_season %>%
+  ggplot(aes(x = season, y = prop, fill = state)) +
+  geom_col() +
+  facet_wrap(~ location, ncol = 2) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Rain state composition by location and season", x = NULL, y = "Proportion of days", fill = "State") +
+  theme_minimal(base_size = 12)
+```
+
+### Temp
+
+```{r}
+temp_props_loc_season <- get_table(temp, location, season)
+
+temp_props_loc_season %>%
+  select(location, state, season, prop) %>%
+  pivot_wider(
+    names_from  = state,
+    values_from = prop
+  )
+
+temp_props_loc_season %>%
+  ggplot(aes(x = season, y = prop, fill = state)) +
+  geom_col() +
+  facet_wrap(~ location, ncol = 2) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Rain state composition by location and season", x = NULL, y = "Proportion of days", fill = "State") +
+  theme_minimal(base_size = 12)
+```
+
+## Fit Markov Models
+
+### Rain
+
+```{r}
+markov_report("rain", c("location", "season"))
+```
+### Temp
+
+```{r}
+markov_report("temp", c("location", "season"))
+```
+
