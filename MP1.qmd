@@ -1,5 +1,6 @@
 ---
 title: "MP1"
+author: "Dillon and Ruben"
 format: html
 ---
 
@@ -120,6 +121,26 @@ get_table <- function(cat_col, ...) {
     unnest(data)
 }
 
+props_kable <- function(df, group_cols, caption_add) {
+  by_str <- paste(group_cols, collapse = " and ")
+  
+  df %>%
+    select(all_of(group_cols), state, prop) %>%
+    mutate(
+      prop = scales::percent(prop, accuracy = 0.01)
+    ) %>%
+    pivot_wider(
+      names_from  = state,
+      values_from = prop
+    ) %>%
+    arrange(across(all_of(group_cols))) %>%
+    kable(
+      caption = paste0(caption_add, " State Proportions by ", by_str)
+    ) %>%
+    kable_styling(full_width = FALSE) %>%
+    column_spec(1, bold = TRUE)
+}
+
 fit_markov_on_nonmissing_blocks <- function(x) {
   x <- as.vector(x)
   is_miss  <- is.na(x)
@@ -132,67 +153,89 @@ fit_markov_on_nonmissing_blocks <- function(x) {
 
 markov_report <- function(cat_col, group_cols = c("location")) {
   fit_tbl <- weather_all %>%
-    group_by(across(all_of(group_cols)))%>%
+    group_by(across(all_of(group_cols))) %>%
     summarise(seq = list(.data[[cat_col]]), .groups = "drop") %>%
     mutate(
       fit   = map(seq, fit_markov_on_nonmissing_blocks),
-      chain = map(fit, "estimate"),
-      steady = map(chain, steadyStates)
+      chain = map(fit, "estimate")
     )
-  out <- vector("list", nrow(fit_tbl))
+
+  trans_out <- vector("list", nrow(fit_tbl))
+  tbl_out   <- vector("list", nrow(fit_tbl))
+
   for (i in seq_len(nrow(fit_tbl))) {
     row <- fit_tbl[i, ]
-
     chain <- row$chain[[1]]
+
+    grp_vals <- row %>%
+      select(all_of(group_cols)) %>%
+      mutate(across(everything(), as.character))
+
     seq_vec <- row$seq[[1]] %>%
       as.factor() %>%
       fct_na_value_to_level(level = "unobserved")
 
-    # group label
-    grp_vals <- row %>% select(any_of(group_cols))
-    grp_label <- paste(paste0(names(grp_vals), ": ", sapply(grp_vals, as.character)), collapse = " | ")
-
-    cat("\n\n## ", "Chain — ", grp_label, "\n\n", sep = "")
-
-    # adequacy: transition counts and row sums
+    # adequacy: transition count matrix + row sums
     transition_counts <- createSequenceMatrix(seq_vec)
     row_totals <- rowSums(transition_counts)
 
-    cat("### Data adequacy check\n\n")
-    print(tibble(state = names(row_totals), outgoing_transitions = as.integer(row_totals)))
+    adequacy_tbl <- tibble(
+      state = names(row_totals),
+      outgoing_transitions = as.integer(row_totals)
+    )
 
-    # estimated transition matrix
-    cat("\n\n### Estimated transition probabilities\n\n")
-    print(chain@transitionMatrix)
-
-    # stationary distribution + expected return times
-    cat("\n\n### Stationary distribution + Expected return times (1 / π)\n\n")
+    # stationary + return times
     pi <- as.numeric(steadyStates(chain)[1, ])
     names(pi) <- states(chain)
-    print(tibble(state = names(pi), stationary = pi, expected_return_time = 1 / pi))
-    
-    # transition matrix for plotting
+
+    steady_tbl <- tibble(
+      state = names(pi),
+      stationary = pi,
+      expected_return_time = 1 / pi
+    )
+
+    tbl_out[[i]] <- bind_cols(
+      grp_vals[rep(1, nrow(steady_tbl)), ],
+      left_join(steady_tbl, adequacy_tbl, by = "state")
+    )
+
+    # transition matrix
     trans_long <- as.data.frame(chain@transitionMatrix) %>%
       rownames_to_column("from") %>%
       pivot_longer(-from, names_to = "to", values_to = "p")
 
-    out[[i]] <- bind_cols(grp_vals, trans_long)
+    trans_out[[i]] <- bind_cols(grp_vals, trans_long)
   }
-  p <- bind_rows(out) %>%
+
+  summary_tbl <- bind_rows(tbl_out) %>%
+    arrange(across(all_of(group_cols)), state)
+
+  tbl_kable <- summary_tbl %>%
+    kable(
+      digits = 4,
+      caption = paste0(cat_col, ": adequacy (outgoing transitions), stationary π, and expected return times")
+    ) %>%
+    kable_styling(full_width = FALSE)
+
+  trans_df <- bind_rows(trans_out)
+
+  p <- trans_df %>%
     ggplot(aes(x = to, y = from, fill = p)) +
     geom_tile(color = "white") +
     geom_text(aes(label = sprintf("%.2f", p)), size = 3) +
-    labs(title = paste0(cat_col, " transition matrices by ", group_cols), 
-         x = "To", y = "From", fill = "P") +
+    labs(
+      title = paste0(cat_col, " transition matrices by ", paste(group_cols, collapse = " × ")),
+      x = "To", y = "From", fill = "P"
+    ) +
     theme_minimal(base_size = 12)
-  
+
   if (length(group_cols) == 1) {
     p <- p + facet_wrap(as.formula(paste0("~", group_cols[1])))
-  } else {
+  } else if (length(group_cols) == 2) {
     p <- p + facet_grid(as.formula(paste0(group_cols[2], " ~ ", group_cols[1])))
   }
-    
-  return(p)
+
+  return(list(table = tbl_kable, plot = p))
 }
 ```
 
@@ -206,11 +249,7 @@ markov_report <- function(cat_col, group_cols = c("location")) {
 rain_props_loc <- get_table(rain, location)
 
 rain_props_loc %>%
-  select(location, state, prop) %>%
-  pivot_wider(
-    names_from  = state,
-    values_from = prop
-  )
+  props_kable(c("location"), "Rain")
 
 rain_props_loc %>%
   ggplot(aes(x = location, y = prop, fill = state)) +
@@ -219,17 +258,14 @@ rain_props_loc %>%
   labs(title = "Rain state composition by location", x = NULL, y = "Proportion of days", fill = "State") +
   theme_minimal(base_size = 12)
 ```
+
 ### Temp
 
 ```{r}
 temp_props_loc <- get_table(temp, location)
 
 temp_props_loc %>%
-  select(location, state, prop) %>%
-  pivot_wider(
-    names_from  = state,
-    values_from = prop
-  )
+  props_kable(c("location"), "Temp")
 
 temp_props_loc %>%
   ggplot(aes(x = location, y = prop, fill = state)) +
@@ -244,12 +280,16 @@ temp_props_loc %>%
 ### Rain
 
 ```{r}
-markov_report("rain", c("location"))
+out <- markov_report("rain", c("location"))
+out$table
+out$plot
 ```
 ### Temp
 
 ```{r}
-markov_report("temp", c("location"))
+out <- markov_report("temp", c("location"))
+out$table
+out$plot
 ```
 
 # Part 2: Location x Season
@@ -262,11 +302,7 @@ markov_report("temp", c("location"))
 rain_props_loc_season <- get_table(rain, location, season)
 
 rain_props_loc_season %>%
-  select(location, state, season, prop) %>%
-  pivot_wider(
-    names_from  = state,
-    values_from = prop
-  )
+  props_kable(c("location", "season"), "Rain")
 
 rain_props_loc_season %>%
   ggplot(aes(x = season, y = prop, fill = state)) +
@@ -283,11 +319,7 @@ rain_props_loc_season %>%
 temp_props_loc_season <- get_table(temp, location, season)
 
 temp_props_loc_season %>%
-  select(location, state, season, prop) %>%
-  pivot_wider(
-    names_from  = state,
-    values_from = prop
-  )
+  props_kable(c("location", "season"), "Temp")
 
 temp_props_loc_season %>%
   ggplot(aes(x = season, y = prop, fill = state)) +
@@ -303,11 +335,15 @@ temp_props_loc_season %>%
 ### Rain
 
 ```{r}
-markov_report("rain", c("location", "season"))
+out <- markov_report("rain", c("location", "season"))
+out$table
+out$plot
 ```
 ### Temp
 
 ```{r}
-markov_report("temp", c("location", "season"))
+out <- markov_report("temp", c("location", "season"))
+out$table
+out$plot
 ```
 
