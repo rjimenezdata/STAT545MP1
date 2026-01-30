@@ -1,6 +1,7 @@
 ---
 title: "MP1"
 author: "Dillon and Ruben"
+code-fold: true
 format: html
 ---
 
@@ -61,8 +62,8 @@ weather_all <- bind_rows(
 ```{r}
 # Rain
 # 0 inches = none
-# 0 to 1 = light
-# >= 1 = heavy
+# 0 to 0.75 = light
+# >= 0.75 = heavy
 
 # Temp
 # <63 = cold
@@ -78,8 +79,8 @@ add_weathers <- function(df) {
     mutate(
       rain = case_when(
         prcp == 0              ~ "none",
-        prcp > 0 & prcp < 1    ~ "light",
-        prcp >= 1              ~ "heavy",
+        prcp > 0 & prcp < 0.5    ~ "light",
+        prcp >= 0.5              ~ "heavy",
         TRUE                   ~ NA_character_
       ),
       temp = case_when(
