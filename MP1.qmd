@@ -260,6 +260,10 @@ rain_props_loc %>%
   theme_minimal(base_size = 12)
 ```
 
+-   SLO seems to be driest overall.
+-   Marin experiences more light and heavy rain.
+-   San Diego has very low heavy rain, but high missingness in data
+
 ### Temp
 
 ```{r}
@@ -276,6 +280,12 @@ temp_props_loc %>%
   theme_minimal(base_size = 12)
 ```
 
+-   Marin has most cold days (further north)
+
+-   SLO has balanced mix between temperature grouping
+
+-   San Diego has the highest comfortable percentage
+
 ## Fit Markov Models
 
 ### Rain
@@ -285,6 +295,13 @@ out <- markov_report("rain", c("location"))
 out$table
 out$plot
 ```
+
+-   San Diego has an extremely long return time for heavy rain
+
+-   Marin has more frequent transitions to rainy states
+
+-   No rain state is highly persistent for all locations
+
 ### Temp
 
 ```{r}
@@ -292,6 +309,10 @@ out <- markov_report("temp", c("location"))
 out$table
 out$plot
 ```
+
+-   Temperature states are all highly persistent (as seen on diagonal).
+
+-   Strong day-today stability in temperature for all.
 
 # Part 2: Location x Season
 
@@ -314,6 +335,12 @@ rain_props_loc_season %>%
   theme_minimal(base_size = 12)
 ```
 
+-   Patterns dominated by seasonality for all locations
+
+-   Much rainier in Oct-March compared to Apr-Sept
+
+-   San Diego manages to stay dry year round, but very high proportion of missing data in Oct-March
+
 ### Temp
 
 ```{r}
@@ -331,6 +358,10 @@ temp_props_loc_season %>%
   theme_minimal(base_size = 12)
 ```
 
+-   Once again, patterns strongly dominated by seasonality
+
+-   As expected, more hot days in summer and cold days in winter, with San Diego standing out as best weather once again.
+
 ## Fit Markov Models
 
 ### Rain
@@ -340,6 +371,11 @@ out <- markov_report("rain", c("location", "season"))
 out$table
 out$plot
 ```
+
+-   The heavy rain returns times in Apr-Sept are impossibly long, especially for San Diego (759)
+
+-   In winter, Marin County specifically has a large increase in estimated rainy states
+
 ### Temp
 
 ```{r}
@@ -348,3 +384,8 @@ out$table
 out$plot
 ```
 
+-   Temperature persistence occurs once again
+
+-   In Summer hot to hot persistence is extremely high, while most other states have higher transition to the state +1 in heat.
+
+-   In winter, almost all have high persistence.
