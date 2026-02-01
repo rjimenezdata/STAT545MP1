@@ -244,7 +244,7 @@ markov_report <- function(cat_col, group_cols = c("location")) {
 
 ## Summary Table of Days in Each State
 
-### Rain
+### Rainy Days
 
 ```{r}
 rain_props_loc <- get_table(rain, location)
@@ -260,11 +260,11 @@ rain_props_loc %>%
   theme_minimal(base_size = 12)
 ```
 
--   SLO seems to be driest overall.
--   Marin experiences more light and heavy rain.
--   San Diego has very low heavy rain, but high missingness in data
+-   We defined no rain as 0 inches of rain, light rain as between 0 and 1 inch of rain, and heavy rain as more than 1 inch of rain.
+-   San Diego seems to be driest overall when we normalize for nonmissing values. About 94% of all observed days were dry, compared to 89% for SLO and 84% for Marin.
+-   Marin experiences more light and heavy rain. It rained on about 16% of all observed days in Marin, 11% of all observed days in SLO and 6% of all observed days in San Diego when normalized for nonmissing values.
 
-### Temp
+### Temperature
 
 ```{r}
 temp_props_loc <- get_table(temp, location)
@@ -280,15 +280,15 @@ temp_props_loc %>%
   theme_minimal(base_size = 12)
 ```
 
--   Marin has most cold days (further north)
+-   We defined cold days as having maximum daily temperature less than 63 degrees, comfortable days being between 63 to 75 degrees at maximum, and hot days having greater than 75 degrees maximum.
 
--   SLO has balanced mix between temperature grouping
+-   Marin has highest proportion of cold days at almost 24% when normalized, compared to 12% for SLO and 6% for San Diego. This makes sense with how far north and coastal it is.
 
--   San Diego has the highest comfortable percentage
+-   San Diego has the highest proportion of comfortable days. When normalized it is almost 69%, compared to 46% for SLO and about 36% for Marin.
 
 ## Fit Markov Models
 
-### Rain
+### Rain Behavior
 
 ```{r}
 out <- markov_report("rain", c("location"))
@@ -296,13 +296,13 @@ out$table
 out$plot
 ```
 
--   San Diego has an extremely long return time for heavy rain
+-   San Diego has an extremely expected long return time for heavy rain, at 178 days cumulatively.
 
--   Marin has more frequent transitions to rainy states
+-   Marin has the most frequent transitions to rainy states.
 
--   No rain state is highly persistent for all locations
+-   The "no rain" state is highly persistent for all locations. Additionally, across all three locations, we can observe that it is most likely to rain lightly after it has just rained heavily. In all three locations, it is most likely to stop raining after it has just rained lightly.
 
-### Temp
+### Temperature Behavior
 
 ```{r}
 out <- markov_report("temp", c("location"))
@@ -312,7 +312,9 @@ out$plot
 
 -   Temperature states are all highly persistent (as seen on diagonal).
 
--   Strong day-today stability in temperature for all.
+-   San Diego has over double the return time to a cold state as the next longest return time to cold, which is SLO.
+
+-   Marin is most likely to have streaks of hot days compared to the other two locations. San Diego is most likely to have streaks of comfortable days.
 
 # Part 2: Location x Season
 
@@ -335,13 +337,13 @@ rain_props_loc_season %>%
   theme_minimal(base_size = 12)
 ```
 
--   Patterns dominated by seasonality for all locations
+-   Patterns dominated by seasonality for all locations.
 
--   Much rainier in Oct-March compared to Apr-Sept
+-   Much rainier in Oct-March compared to Apr-Sept.
 
--   San Diego manages to stay dry year round, but very high proportion of missing data in Oct-March
+-   San Diego manages to stay dry year round, but very high proportion of missing data in Oct-March.
 
-### Temp
+### Temperature
 
 ```{r}
 temp_props_loc_season <- get_table(temp, location, season)
@@ -354,13 +356,15 @@ temp_props_loc_season %>%
   geom_col() +
   facet_wrap(~ location, ncol = 2) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title = "Rain state composition by location and season", x = NULL, y = "Proportion of days", fill = "State") +
+  labs(title = "Temperature state composition by location and season", x = NULL, y = "Proportion of days", fill = "State") +
   theme_minimal(base_size = 12)
 ```
 
--   Once again, patterns strongly dominated by seasonality
+-   Once again, patterns strongly dominated by seasonality.
 
 -   As expected, more hot days in summer and cold days in winter, with San Diego standing out as best weather once again.
+
+-   Marin appears to be hot proportionally more than the other locations based on the observed data during the summer.
 
 ## Fit Markov Models
 
@@ -372,11 +376,13 @@ out$table
 out$plot
 ```
 
--   The heavy rain returns times in Apr-Sept are impossibly long, especially for San Diego (759)
+-   The heavy rain returns times in Apr-Sept are impossibly long, especially for San Diego (759).
 
 -   In winter, Marin County specifically has a large increase in estimated rainy states
 
-### Temp
+-   Across all three locations, transition to no rain from a rainy state during the summer is more likely than the winter.
+
+### Temperature
 
 ```{r}
 out <- markov_report("temp", c("location", "season"))
@@ -384,8 +390,10 @@ out$table
 out$plot
 ```
 
--   Temperature persistence occurs once again
+-   Temperature persistence occurs once again during the winter, but not as strongly during the summer.
 
--   In Summer hot to hot persistence is extremely high, while most other states have higher transition to the state +1 in heat.
+-   During summer hot to hot persistence is extremely high. This means there are more likely to be streaks of hot days.
 
--   In winter, almost all have high persistence.
+-   San Diego has the most persistence in the comfortable state across both seasons.
+
+-   The expected return time for the cold state in San Diego summers is very long (118). The next longest expected return time for the cold state is in about 35 in Marin, meaning cold days are much more common in Marin and SLO summers than in San Diego.

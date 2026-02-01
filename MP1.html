@@ -70,11 +70,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="MP1_files/libs/quarto-html/quarto-syntax-highlighting-7b89279ff1a6dce999919e0e67d4d9ec.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="MP1_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="MP1_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="MP1_files/libs/bootstrap/bootstrap-9e3ffae467580fdb927a41352e75a2e0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="MP1_files/libs/bootstrap/bootstrap-d6a003b94517c951b2d65075d42fb01b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script src="MP1_files/libs/kePrint-0.0.1/kePrint.js"></script>
-
 <link href="MP1_files/libs/lightable-0.0.1/lightable.css" rel="stylesheet">
-
 
 
 </head>
@@ -350,8 +348,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h1>Part 1: Location</h1>
 <section id="summary-table-of-days-in-each-state" class="level2">
 <h2 class="anchored" data-anchor-id="summary-table-of-days-in-each-state">Summary Table of Days in Each State</h2>
-<section id="rain" class="level3">
-<h3 class="anchored" data-anchor-id="rain">Rain</h3>
+<section id="rainy-days" class="level3">
+<h3 class="anchored" data-anchor-id="rainy-days">Rainy Days</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -415,13 +413,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li>SLO seems to be driest overall.</li>
-<li>Marin experiences more light and heavy rain.</li>
-<li>San Diego has very low heavy rain, but high missingness in data</li>
+<li>We defined no rain as 0 inches of rain, light rain as between 0 and 1 inch of rain, and heavy rain as more than 1 inch of rain.</li>
+<li>San Diego seems to be driest overall when we normalize for nonmissing values. About 94% of all observed days were dry, compared to 89% for SLO and 84% for Marin.</li>
+<li>Marin experiences more light and heavy rain. It rained on about 16% of all observed days in Marin, 11% of all observed days in SLO and 6% of all observed days in San Diego when normalized for nonmissing values.</li>
 </ul>
 </section>
-<section id="temp" class="level3">
-<h3 class="anchored" data-anchor-id="temp">Temp</h3>
+<section id="temperature" class="level3">
+<h3 class="anchored" data-anchor-id="temperature">Temperature</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -485,16 +483,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li><p>Marin has most cold days (further north)</p></li>
-<li><p>SLO has balanced mix between temperature grouping</p></li>
-<li><p>San Diego has the highest comfortable percentage</p></li>
+<li><p>We defined cold days as having maximum daily temperature less than 63 degrees, comfortable days being between 63 to 75 degrees at maximum, and hot days having greater than 75 degrees maximum.</p></li>
+<li><p>Marin has highest proportion of cold days at almost 24% when normalized, compared to 12% for SLO and 6% for San Diego. This makes sense with how far north and coastal it is.</p></li>
+<li><p>San Diego has the highest proportion of comfortable days. When normalized it is almost 69%, compared to 46% for SLO and about 36% for Marin.</p></li>
 </ul>
 </section>
 </section>
 <section id="fit-markov-models" class="level2">
 <h2 class="anchored" data-anchor-id="fit-markov-models">Fit Markov Models</h2>
-<section id="rain-1" class="level3">
-<h3 class="anchored" data-anchor-id="rain-1">Rain</h3>
+<section id="rain-behavior" class="level3">
+<h3 class="anchored" data-anchor-id="rain-behavior">Rain Behavior</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -593,13 +591,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li><p>San Diego has an extremely long return time for heavy rain</p></li>
-<li><p>Marin has more frequent transitions to rainy states</p></li>
-<li><p>No rain state is highly persistent for all locations</p></li>
+<li><p>San Diego has an extremely expected long return time for heavy rain, at 178 days cumulatively.</p></li>
+<li><p>Marin has the most frequent transitions to rainy states.</p></li>
+<li><p>The “no rain” state is highly persistent for all locations. Additionally, across all three locations, we can observe that it is most likely to rain lightly after it has just rained heavily. In all three locations, it is most likely to stop raining after it has just rained lightly.</p></li>
 </ul>
 </section>
-<section id="temp-1" class="level3">
-<h3 class="anchored" data-anchor-id="temp-1">Temp</h3>
+<section id="temperature-behavior" class="level3">
+<h3 class="anchored" data-anchor-id="temperature-behavior">Temperature Behavior</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -699,7 +697,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <ul>
 <li><p>Temperature states are all highly persistent (as seen on diagonal).</p></li>
-<li><p>Strong day-today stability in temperature for all.</p></li>
+<li><p>San Diego has over double the return time to a cold state as the next longest return time to cold, which is SLO.</p></li>
+<li><p>Marin is most likely to have streaks of hot days compared to the other two locations. San Diego is most likely to have streaks of comfortable days.</p></li>
 </ul>
 </section>
 </section>
@@ -708,8 +707,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h1>Part 2: Location x Season</h1>
 <section id="summary-table-of-days-in-each-state-1" class="level2">
 <h2 class="anchored" data-anchor-id="summary-table-of-days-in-each-state-1">Summary Table of Days in Each State</h2>
-<section id="rain-2" class="level3">
-<h3 class="anchored" data-anchor-id="rain-2">Rain</h3>
+<section id="rain" class="level3">
+<h3 class="anchored" data-anchor-id="rain">Rain</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -802,13 +801,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li><p>Patterns dominated by seasonality for all locations</p></li>
-<li><p>Much rainier in Oct-March compared to Apr-Sept</p></li>
-<li><p>San Diego manages to stay dry year round, but very high proportion of missing data in Oct-March</p></li>
+<li><p>Patterns dominated by seasonality for all locations.</p></li>
+<li><p>Much rainier in Oct-March compared to Apr-Sept.</p></li>
+<li><p>San Diego manages to stay dry year round, but very high proportion of missing data in Oct-March.</p></li>
 </ul>
 </section>
-<section id="temp-2" class="level3">
-<h3 class="anchored" data-anchor-id="temp-2">Temp</h3>
+<section id="temperature-1" class="level3">
+<h3 class="anchored" data-anchor-id="temperature-1">Temperature</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -889,7 +888,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>() <span class="sc">+</span></span>
 <span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> location, <span class="at">ncol =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
 <span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_continuous</span>(<span class="at">labels =</span> scales<span class="sc">::</span>percent) <span class="sc">+</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Rain state composition by location and season"</span>, <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Proportion of days"</span>, <span class="at">fill =</span> <span class="st">"State"</span>) <span class="sc">+</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Temperature state composition by location and season"</span>, <span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"Proportion of days"</span>, <span class="at">fill =</span> <span class="st">"State"</span>) <span class="sc">+</span></span>
 <span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>(<span class="at">base_size =</span> <span class="dv">12</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
@@ -901,15 +900,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li><p>Once again, patterns strongly dominated by seasonality</p></li>
+<li><p>Once again, patterns strongly dominated by seasonality.</p></li>
 <li><p>As expected, more hot days in summer and cold days in winter, with San Diego standing out as best weather once again.</p></li>
+<li><p>Marin appears to be hot proportionally more than the other locations based on the observed data during the summer.</p></li>
 </ul>
 </section>
 </section>
 <section id="fit-markov-models-1" class="level2">
 <h2 class="anchored" data-anchor-id="fit-markov-models-1">Fit Markov Models</h2>
-<section id="rain-3" class="level3">
-<h3 class="anchored" data-anchor-id="rain-3">Rain</h3>
+<section id="rain-1" class="level3">
+<h3 class="anchored" data-anchor-id="rain-1">Rain</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -1090,12 +1090,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li><p>The heavy rain returns times in Apr-Sept are impossibly long, especially for San Diego (759)</p></li>
+<li><p>The heavy rain returns times in Apr-Sept are impossibly long, especially for San Diego (759).</p></li>
 <li><p>In winter, Marin County specifically has a large increase in estimated rainy states</p></li>
+<li><p>Across all three locations, transition to no rain from a rainy state during the summer is more likely than the winter.</p></li>
 </ul>
 </section>
-<section id="temp-3" class="level3">
-<h3 class="anchored" data-anchor-id="temp-3">Temp</h3>
+<section id="temperature-2" class="level3">
+<h3 class="anchored" data-anchor-id="temperature-2">Temperature</h3>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -1276,9 +1277,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li><p>Temperature persistence occurs once again</p></li>
-<li><p>In Summer hot to hot persistence is extremely high, while most other states have higher transition to the state +1 in heat.</p></li>
-<li><p>In winter, almost all have high persistence.</p></li>
+<li><p>Temperature persistence occurs once again during the winter, but not as strongly during the summer.</p></li>
+<li><p>During summer hot to hot persistence is extremely high. This means there are more likely to be streaks of hot days.</p></li>
+<li><p>San Diego has the most persistence in the comfortable state across both seasons.</p></li>
+<li><p>The expected return time for the cold state in San Diego summers is very long (118). The next longest expected return time for the cold state is in about 35 in Marin, meaning cold days are much more common in Marin and SLO summers than in San Diego.</p></li>
 </ul>
 </section>
 </section>
